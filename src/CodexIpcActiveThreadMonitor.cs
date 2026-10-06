@@ -39,6 +39,13 @@ internal sealed class CodexIpcActiveThreadMonitor : IDisposable
         }
     }
 
+    public string[] GetLocalThreadIds()
+    {
+        lock (_sync)
+            return _activeByWindow.Values.Where(item => item.HostId == "local")
+                .Select(item => item.ThreadId).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
     private async Task RunAsync(CancellationToken cancellationToken)
     {
         var retryDelay = TimeSpan.FromMilliseconds(350);
@@ -196,8 +203,10 @@ internal sealed class CodexIpcActiveThreadMonitor : IDisposable
         var key = $"{sourceClientId}\u001f{hostId}\u001f{conversationId}";
         lock (_sync)
         {
+            var previousVersion = _version;
             if (followingElement.GetBoolean())
             {
+                if (_activeByWindow.ContainsKey(key)) return;
                 _activeByWindow[key] = new ActiveConversation(conversationId, hostId);
             }
             else if (_activeByWindow.TryGetValue(key, out var active)
@@ -205,7 +214,10 @@ internal sealed class CodexIpcActiveThreadMonitor : IDisposable
             {
                 _activeByWindow.Remove(key);
             }
+            else return;
             RecomputeActiveThread();
+            // A candidate change matters even when several subscriptions remain.
+            if (_version == previousVersion) _version++;
         }
     }
 
@@ -229,6 +241,8 @@ internal sealed class CodexIpcActiveThreadMonitor : IDisposable
         var keyPrefix = $"{clientId}\u001f";
         lock (_sync)
         {
+            var previousCount = _activeByWindow.Count;
+            var previousVersion = _version;
             foreach (var key in _activeByWindow.Keys
                 .Where(key => key.StartsWith(keyPrefix, StringComparison.Ordinal))
                 .ToArray())
@@ -236,6 +250,7 @@ internal sealed class CodexIpcActiveThreadMonitor : IDisposable
                 _activeByWindow.Remove(key);
             }
             RecomputeActiveThread();
+            if (previousCount != _activeByWindow.Count && previousVersion == _version) _version++;
         }
     }
 

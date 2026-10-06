@@ -23,6 +23,7 @@ internal sealed class UsageCardForm : Form
     internal void ChangePage(int delta){_page+=delta;_layoutSignature=null;}
     internal event Action? PageChanged;
     internal SessionVitals? Vitals;
+    internal string SessionSource = "";
     internal double Expansion;
     public int WidthDip => DisplaySettings.CompactWidth + (int)Math.Round(266 * Expansion);
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
@@ -244,6 +245,7 @@ internal sealed class UsageCardForm : Form
                 DetailWindow(g, "五小时", Quota?.FiveHour, x, 45, text, muted);
                 DetailWindow(g, "每周", Quota?.Weekly, x, 96, text, muted);
                 var rows = new List<string>();
+                if (Tokens is not null && SessionSource.Length > 0) rows.Add(SessionSource);
                 if (DisplaySettings.ShowSessionDetails)
                 {
                     rows.Add($"{Vitals?.Model ?? "模型未知"} · {Vitals?.Effort ?? ""}");

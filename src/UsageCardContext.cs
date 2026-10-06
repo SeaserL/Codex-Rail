@@ -107,7 +107,7 @@ internal sealed partial class UsageCardContext : ApplicationContext
         UiText.Language = _settings.Language;
         Save();
         _form.Settings = _settings; _form.Details = false;
-        _tokens = new TokenLogMonitor(sessionRoot) { RequirePreferredThread = true };
+        _tokens = new TokenLogMonitor(sessionRoot);
         _ = _form.Handle;
         var menu = new ContextMenuStrip();
         menu.Items.Add("立即刷新额度", null, (_, _) => { _nextQuota = DateTimeOffset.MinValue; PollData(); });
@@ -318,6 +318,8 @@ internal sealed partial class UsageCardContext : ApplicationContext
         {
             var route = _route.GetStatus();
             _tokens.PreferredThreadId = route.ThreadId;
+            var candidates = _route.GetLocalThreadIds();
+            _tokens.AllowedThreadIds = candidates.Length == 0 ? null : candidates.ToHashSet(StringComparer.OrdinalIgnoreCase);
             TokenSnapshot? token;
             try { token = await Task.Run(() => _tokens.Poll()); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { token = null; }
@@ -326,10 +328,11 @@ internal sealed partial class UsageCardContext : ApplicationContext
             SessionVitals vitals;
             try { vitals = await Task.Run(() => _vitals.Poll(token?.LogPath)); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { vitals = new("未知", "", "数据暂不可用", null, null, null); }
-            if (route.ThreadId is null) vitals = vitals with { State = route.IsConnected ? "当前会话未确认" : "等待连接 Codex" };
+            var sessionSource = route.ThreadId is not null ? "IPC 订阅会话" : "最近活动会话（自动匹配）";
             if (_disposed) return;
             if (_route.GetStatus().Version != route.Version) { _sessionRefreshPending = true; return; }
-            if (_form.Tokens != token || _form.Vitals != vitals) { _form.Tokens = token; _form.Vitals = vitals; Redraw(); }
+            if (_form.Tokens != token || _form.Vitals != vitals || _form.SessionSource != sessionSource)
+            { _form.Tokens = token; _form.Vitals = vitals; _form.SessionSource = sessionSource; Redraw(); }
         }
         finally { _busy = false; if (_sessionRefreshPending && !_disposed) PollData(); }
     }

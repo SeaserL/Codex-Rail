@@ -31,6 +31,10 @@ internal sealed class TokenLogMonitor : IDisposable
     public string? PreferredThreadId { get; set; }
     // The most recently written log is not proof of the visible conversation.
     public bool RequirePreferredThread { get; set; }
+    public IReadOnlySet<string>? AllowedThreadIds { get; set; }
+
+    private bool IsAllowedSession(string path) => AllowedThreadIds is null
+        || AllowedThreadIds.Contains(ExtractThreadId(path));
 
     public TokenLogMonitor(string? sessionRoot = null)
     {
@@ -68,6 +72,8 @@ internal sealed class TokenLogMonitor : IDisposable
             SwitchActiveLog(null);
             return null;
         }
+        if (!usePreferredThread && _activeLogPath is not null && !IsAllowedSession(_activeLogPath))
+            SwitchActiveLog(null);
         ProcessChangedPaths(allowAutomaticSwitch: !usePreferredThread);
 
         if (usePreferredThread)
@@ -144,7 +150,7 @@ internal sealed class TokenLogMonitor : IDisposable
                 continue;
             }
 
-            if (!File.Exists(path) || !IsRootDesktopSession(path))
+            if (!File.Exists(path) || !IsAllowedSession(path) || !IsRootDesktopSession(path))
             {
                 continue;
             }
@@ -214,7 +220,7 @@ internal sealed class TokenLogMonitor : IDisposable
 
             foreach (var candidate in candidates)
             {
-                if (!IsRootDesktopSession(candidate.Path))
+                if (!IsAllowedSession(candidate.Path) || !IsRootDesktopSession(candidate.Path))
                 {
                     continue;
                 }

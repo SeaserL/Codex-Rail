@@ -51,7 +51,7 @@ The self-contained build is about **49 MiB** because it includes .NET/WinForms. 
 
 ## Data and compatibility
 
-Quota comes from the local Codex app-server rate-limit method. Session metrics come from local session JSONL metadata and counters; session routing uses desktop IPC. When the route is missing or ambiguous, session metrics are unavailable instead of guessing from the newest log. These session files can also contain prompts and responses. Codex Rail does not upload chat logs or ship analytics, and does not directly read authentication files. Codex itself handles the quota connection. [Data flow and privacy](docs/PRIVACY.md).
+Quota comes from the local Codex app-server rate-limit method. Session metrics come from local session JSONL metadata and counters; session routing uses desktop IPC. When subscriptions are ambiguous, the most recently active subscribed local session is displayed. If IPC is unavailable, the latest local desktop session is used. Details identify this fallback; it may differ from the chat currently being viewed. These session files can also contain prompts and responses. Codex Rail does not upload chat logs or ship analytics, and does not directly read authentication files. Codex itself handles the quota connection. [Data flow and privacy](docs/PRIVACY.md).
 
 This is an **external overlay**, not an official Codex extension or a mounted sidebar component. IPC, log formats and sidebar geometry can change between Codex releases. A working weekly allowance does not imply the 5-hour field is available. Very small work areas hide the overlay rather than covering navigation buttons.
 

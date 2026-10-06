@@ -5,6 +5,17 @@ internal static class SessionRoutingSuite
 {
     internal static bool Run(string[] args)
     {
+        if(args.Length==1&&args[0]=="--live-session-diagnostic")
+        {
+            using var live=new CodexIpcActiveThreadMonitor();Thread.Sleep(2000);
+            var status=live.GetStatus();var candidates=live.GetLocalThreadIds();
+            using var logsMonitor=new TokenLogMonitor(){PreferredThreadId=status.ThreadId,
+                AllowedThreadIds=candidates.Length==0?null:candidates.ToHashSet(StringComparer.OrdinalIgnoreCase)};
+            var snapshot=logsMonitor.Poll(true);
+            Console.WriteLine(JsonSerializer.Serialize(new{status.IsConnected,localSubscriptions=candidates.Length,
+                routeKnown=status.ThreadId!=null,hasSessionData=snapshot!=null,
+                matchedSubscribedSession=snapshot!=null&&candidates.Contains(snapshot.ThreadId)}));return true;
+        }
         if(args.Length==1&&args[0]=="--ipc-diagnostic")
         {
             using var live=new CodexIpcActiveThreadMonitor();Thread.Sleep(2000);
@@ -26,12 +37,20 @@ internal static class SessionRoutingSuite
         var stamp=File.GetLastWriteTimeUtc(pa);File.AppendAllText(pa,Usage(200));File.SetLastWriteTimeUtc(pa,stamp);
         if(monitor.Poll()?.TotalTokens!=200)throw new Exception("same timestamp append hidden by cache");
         monitor.PreferredThreadId=null;if(monitor.Poll()!=null)throw new Exception("disconnection retained A");
+        File.SetLastWriteTimeUtc(pb,DateTime.UtcNow.AddMinutes(2));
+        using var fallback=new TokenLogMonitor(logs){AllowedThreadIds=new HashSet<string>{a,b}};
+        if(fallback.Poll(true)?.TotalTokens!=900)throw new Exception("multiple subscriptions hid usable data");
+        fallback.AllowedThreadIds=new HashSet<string>{a};
+        if(fallback.Poll()?.TotalTokens!=200)throw new Exception("candidate removal retained excluded B");
+        fallback.PreferredThreadId=b;if(fallback.Poll()?.TotalTokens!=900)throw new Exception("known route did not override fallback");
+        fallback.PreferredThreadId=null;fallback.AllowedThreadIds=null;
+        if(fallback.Poll(true)?.TotalTokens!=900)throw new Exception("IPC unavailable hid fallback data");
         using var route=new CodexIpcActiveThreadMonitor(connect:false);var changes=0;route.Changed+=()=>changes++;
         void Follow(string id,bool following)=>route.ProcessFrame(JsonSerializer.SerializeToUtf8Bytes(new{type="broadcast",method="thread-stream-following-changed",sourceClientId="window",@params=new{conversationId=id,hostId="local",following}}));
         Follow(a,true);var version=route.GetStatus().Version;Follow(b,true);
         if(route.GetStatus().ThreadId!=null||route.GetStatus().Version==version||changes!=2)throw new Exception("ambiguous subscriptions guessed last replay");
         Follow(a,false);if(route.GetStatus().ThreadId!=b)throw new Exception("late old unsubscribe cleared B");
         Follow(b,false);if(route.GetStatus().ThreadId!=null)throw new Exception("closed route retained B");
-        Console.WriteLine("PASS: cached A/B switches, empty thread, disconnect, same-timestamp append, IPC invalidation and late unsubscribe.");return true;
+        Console.WriteLine("PASS: cached switches, empty thread, timestamp append, IPC invalidation, ambiguous/offline fallback and candidate removal.");return true;
     }
 }

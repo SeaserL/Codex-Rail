@@ -1,5 +1,12 @@
 # Changelog / 更新记录
 
+## 0.14.2
+
+- Restore session metrics when Codex keeps multiple subscriptions: select the most recently active subscribed local session, with a labeled local-log fallback when IPC is unavailable.
+- Restore display without weakening quota/session separation or stale-result rejection. Candidate changes invalidate the selection; known routes take priority.
+- Add live read diagnostics and regressions for ambiguous/offline subscriptions and removed candidates.
+- 修复 0.14.1 在多个订阅时完全隐藏聊天数据的回退；详情标注自动匹配来源。仅查看旧聊天而没有日志活动时，仍不能保证匹配当前页面。
+
 ## 0.14.1 — session refresh / 会话刷新修复
 
 - Separate quota requests from session reads; a slow quota request no longer blocks chat metrics.
