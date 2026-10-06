@@ -63,7 +63,7 @@ Windows 10/11 · x64 · C# / .NET 10 · [MIT 开源](LICENSE) · 独立社区项
 ./test.ps1
 ```
 
-需要 Windows 与 .NET 10 SDK。生产代码与测试分离。欢迎阅读[贡献指南](CONTRIBUTING.md)、[架构](docs/ARCHITECTURE.md)和[更新记录](CHANGELOG.md)。仓库已准备自动构建与测试配置；上传后才能得到 GitHub CI 结果。
+需要 Windows 与 .NET 10 SDK。生产代码与测试分离。欢迎阅读[贡献指南](CONTRIBUTING.md)、[架构](docs/ARCHITECTURE.md)和[更新记录](CHANGELOG.md)。[GitHub Actions](https://github.com/SeaserL/Codex-Rail/actions) 自动构建与验证；版本标签会生成供审阅的 Release 草稿。
 
 <details>
 <summary><strong>为什么我希望这个项目消失</strong></summary>

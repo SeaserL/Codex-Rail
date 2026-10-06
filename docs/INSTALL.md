@@ -7,9 +7,9 @@
 | `CodexRail-win-x64.exe` | .NET 10 **Desktop** Runtime, x64 | 需要桌面运行时，不能只装普通 .NET Runtime |
 | `CodexRail-win-x64-standalone.exe` | Runtime included | 自带运行时，体积较大 |
 
-Use Releases in the repository sidebar to download the EXE and `SHA256SUMS.txt`. No installer, elevation, separate account sign-in or API key is added by this program. The initial build is unsigned; verify its source and release checksum before running.
+Use Releases in the repository sidebar to download and extract the portable ZIP. It contains both EXEs, license notices and `SHA256SUMS.txt`; run the appropriate EXE. No installer, elevation, separate account sign-in or API key is added by this program. The initial build is unsigned; verify its source and release checksum before running.
 
-在仓库侧栏的 Releases 下载 EXE 与 `SHA256SUMS.txt`。本程序没有安装器、单独登录或 API Key 输入，也不要求管理员权限。首版未签名，可核对源码与校验值。
+在仓库侧栏的 Releases 下载并解压便携 ZIP，内含两个 EXE、许可证和 `SHA256SUMS.txt`，选择合适的 EXE 运行。本程序没有安装器、单独登录或 API Key 输入，也不要求管理员权限。首版未签名，可核对源码与校验值。
 
 ## Run / 运行
 
