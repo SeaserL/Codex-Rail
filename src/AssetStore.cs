@@ -1,0 +1,16 @@
+using System.Drawing.Text;
+using System.Security.Cryptography;
+using System.Text.Json;
+namespace CodexTokenOverlay;
+
+internal sealed record FontAsset(string Name, string File) { public override string ToString() => Name + (File.Length == 0 ? "" : "（导入）"); }
+internal static class AssetStore
+{
+    internal static string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexUsageCardLocal", "assets");
+    internal static string Resolve(string kind, string name) { if (string.IsNullOrWhiteSpace(name) || Path.GetFileName(name) != name) return ""; return Path.Combine(Root, kind, name); }
+    private static string Copy(string path, string kind) { if (new FileInfo(path).Length > 32 * 1024 * 1024) throw new InvalidDataException("文件需小于 32 MB。"); var directory = Path.Combine(Root, kind); Directory.CreateDirectory(directory); using var stream = File.OpenRead(path); var name = Convert.ToHexString(SHA256.HashData(stream)) + Path.GetExtension(path).ToLowerInvariant(); var target = Path.Combine(directory, name); if (!File.Exists(target)) File.Copy(path, target); return name; }
+    internal static List<FontAsset> Fonts() { using var installed = new InstalledFontCollection(); var list = new List<FontAsset>(); foreach (var family in installed.Families) { using (family) list.Add(new FontAsset(family.Name, "")); } list = list.OrderBy(f => f.Name).ToList(); var manifest = Path.Combine(Root, "fonts.json"); try { if (File.Exists(manifest)) list.AddRange((JsonSerializer.Deserialize<List<FontAsset>>(File.ReadAllText(manifest)) ?? []).Where(f => File.Exists(Resolve("fonts", f.File)))); } catch (IOException) { } catch (JsonException) { } return list; }
+    internal static FontAsset ImportFont(string path) { if (new FileInfo(path).Length > 32 * 1024 * 1024) throw new InvalidDataException("字体需小于 32 MB。"); using var fonts = new PrivateFontCollection(); fonts.AddFontFile(path); var families = fonts.Families; if (families.Length == 0) throw new InvalidDataException("字体格式不受支持。"); var name = families[0].Name; foreach (var family in families) family.Dispose(); var asset = new FontAsset(name, Copy(path, "fonts")); var manifest = Path.Combine(Root, "fonts.json"); var imported = Fonts().Where(f => f.File.Length != 0 && f.File != asset.File).Append(asset).ToList(); File.WriteAllText(manifest, JsonSerializer.Serialize(imported)); return asset; }
+    internal static string ImportImage(string path) { using var stream = File.OpenRead(path); using var image = Image.FromStream(stream); if (image.Width > 16384 || image.Height > 16384 || (long)image.Width * image.Height > 64_000_000) throw new InvalidDataException("图片尺寸过大，请选择 6400 万像素以内的图片。"); return Copy(path, "images"); }
+    internal static Bitmap? LoadImage(string name) { var path = Resolve("images", name); if (!File.Exists(path)) return null; try { using var source = Image.FromFile(path); var scale = Math.Min(1d, 1024d / Math.Max(source.Width, source.Height)); var bitmap = new Bitmap(Math.Max(1, (int)(source.Width * scale)), Math.Max(1, (int)(source.Height * scale))); using var g = Graphics.FromImage(bitmap); g.DrawImage(source, 0, 0, bitmap.Width, bitmap.Height); return bitmap; } catch (ArgumentException) { return null; } catch (IOException) { return null; } catch (OutOfMemoryException) { return null; } }
+}

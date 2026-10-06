@@ -1,0 +1,19 @@
+{
+  "name": "codex-rail",
+  "display_name": "Codex Rail",
+  "description": "A lightweight Windows sidecar for Codex usage and session metrics. Built to become unnecessary.",
+  "description_zh": "把 Codex 用量与聊天指标放进左侧窄栏。一个期待被官方功能取代的 Windows 浮窗。",
+  "topics": [
+    "codex",
+    "openai",
+    "windows",
+    "usage-monitor",
+    "overlay",
+    "winforms",
+    "dotnet",
+    "quota",
+    "sidebar"
+  ],
+  "visibility": "public",
+  "publication_status": "prepared locally; not uploaded"
+}
