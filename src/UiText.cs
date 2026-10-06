@@ -12,6 +12,7 @@ internal static class UiText
     private static readonly bool SystemEnglish = !CultureInfo.GetCultureInfo(GetUserDefaultUILanguage()).Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
     private static readonly (string Chinese,string English)[] Terms = new Dictionary<string,string>
     {
+        ["当前会话未确认"]="Conversation unconfirmed", ["等待连接 Codex"]="Waiting for Codex connection",
         ["（导入）"]=" (imported)", ["文件需小于 32 MB。"]="File must be smaller than 32 MB.", ["字体过大。"]="Font is too large.", ["图片尺寸过大，请选择 6400 万像素以内的图片。"]="Image is too large; use at most 64 megapixels.",
         ["恢复当前页默认"]="Reset this page", ["额度不足变色"]="Low-quota color alert", ["详情显示状态摘要"]="Show session summary",
         ["达到剩余阈值时变色，恢复后还原；数据过期时不提示。\n平均速度=本轮输出 Token ÷ 整轮耗时，包含等待和工具执行。\n首 Token 等待仅在日志提供时显示。模型与状态可选为独立模块。"]="Alert color applies below the threshold; stale quota does not alert.\nOutput speed = output tokens / full turn time, including tools and waiting.\nFirst-token wait requires log data. Model and state can be separate metrics.",

@@ -96,7 +96,7 @@ internal sealed class QuotaClient : IDisposable
                     try { while (await process.StandardError.ReadLineAsync(_shutdown.Token) is not null) { } }
                     catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException) { }
                 });
-                await RequestAsync("initialize", new { clientInfo = new { name = "codex_rail", title = "Codex Rail", version = "0.14.0" } }, ct);
+                await RequestAsync("initialize", new { clientInfo = new { name = "codex_rail", title = "Codex Rail", version = "0.14.1" } }, ct);
                 await _process.StandardInput.WriteLineAsync("{\"method\":\"initialized\",\"params\":{}}".AsMemory(), ct);
                 await _process.StandardInput.FlushAsync(ct);
             }

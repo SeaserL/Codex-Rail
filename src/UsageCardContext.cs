@@ -44,6 +44,8 @@ internal sealed partial class UsageCardContext : ApplicationContext
     private Point _position;
     private int _viewportTop,_viewportBottom;
     private bool _busy, _hidden, _disposed;
+    private bool _quotaBusy, _sessionRefreshPending;
+    private readonly System.Windows.Forms.Timer _sessionTimer = new() { Interval = 500 };
     private int _eventPending;
     private int _fadeStart;
     private byte _alpha = 255;
@@ -105,7 +107,7 @@ internal sealed partial class UsageCardContext : ApplicationContext
         UiText.Language = _settings.Language;
         Save();
         _form.Settings = _settings; _form.Details = false;
-        _tokens = new TokenLogMonitor(sessionRoot);
+        _tokens = new TokenLogMonitor(sessionRoot) { RequirePreferredThread = true };
         _ = _form.Handle;
         var menu = new ContextMenuStrip();
         menu.Items.Add("立即刷新额度", null, (_, _) => { _nextQuota = DateTimeOffset.MinValue; PollData(); });
@@ -148,7 +150,7 @@ internal sealed partial class UsageCardContext : ApplicationContext
         {
             Synchronize();
             if (_form.Visible) PollData();
-            else if (DateTimeOffset.Now - _hiddenSince > TimeSpan.FromSeconds(15) && !_busy) _quota.Stop();
+            else if (DateTimeOffset.Now - _hiddenSince > TimeSpan.FromSeconds(15) && !_quotaBusy) _quota.Stop();
             var minute = DateTimeOffset.Now.ToUnixTimeSeconds() / 60;
             if (minute != _minute) { _minute = minute; Redraw(); }
         };
@@ -192,7 +194,25 @@ internal sealed partial class UsageCardContext : ApplicationContext
     OnDetails(); if (progress >= 1) _expand.Stop();
 };
         _focus.Tick += (_, _) => { if (_disposed) return; if (!CheckFocus()) Hide(true); else if (_form.Visible && !_form.Capture && !_menuOpen && Environment.TickCount - _themeStart >= 150) { _themeStart = Environment.TickCount; RefreshTheme(); } }; _focus.Start();
+        _route.Changed += RouteChanged;
+        _sessionTimer.Tick += (_, _) => PollData();
+        _sessionTimer.Start();
         _hover.Start(); _timer.Start(); Synchronize(); PollData();
+    }
+    private void RouteChanged()
+    {
+        if (_disposed) return;
+        try { _form.BeginInvoke(() =>
+        {
+            if (_disposed) return;
+            _sessionRefreshPending = true;
+            // Clear immediately: the previous conversation must not remain on screen.
+            _form.Tokens = null;
+            _form.Vitals = new("未知", "", "等待数据", null, null, null);
+            Redraw();
+            PollData();
+        }); }
+        catch (InvalidOperationException) { }
     }
     private void HandleEvent(IntPtr hook, uint ev, IntPtr hwnd, int objectId, int childId, uint thread, uint time)
     {
@@ -289,8 +309,11 @@ internal sealed partial class UsageCardContext : ApplicationContext
     }
     private async void PollData()
     {
-        if (_busy || _disposed || !_form.Visible) return;
+        if (_disposed || !_form.Visible) return;
+        PollQuota();
+        if (_busy) { _sessionRefreshPending = true; return; }
         _busy = true;
+        _sessionRefreshPending = false;
         try
         {
             var route = _route.GetStatus();
@@ -299,21 +322,33 @@ internal sealed partial class UsageCardContext : ApplicationContext
             try { token = await Task.Run(() => _tokens.Poll()); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { token = null; }
             if (_disposed) return;
+            if (_route.GetStatus().Version != route.Version) { _sessionRefreshPending = true; return; }
             SessionVitals vitals;
             try { vitals = await Task.Run(() => _vitals.Poll(token?.LogPath)); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { vitals = new("未知", "", "数据暂不可用", null, null, null); }
+            if (route.ThreadId is null) vitals = vitals with { State = route.IsConnected ? "当前会话未确认" : "等待连接 Codex" };
             if (_disposed) return;
+            if (_route.GetStatus().Version != route.Version) { _sessionRefreshPending = true; return; }
             if (_form.Tokens != token || _form.Vitals != vitals) { _form.Tokens = token; _form.Vitals = vitals; Redraw(); }
-            if (DateTimeOffset.Now >= _nextQuota)
-            {
-                _nextQuota = DateTimeOffset.Now.AddSeconds(60);
-                try { _form.Quota = await _quota.ReadAsync(); _form.QuotaFailed = false; _form.Status = ""; }
-                catch (Exception ex) when (ex is IOException or OperationCanceledException or JsonException or System.ComponentModel.Win32Exception)
-                { _form.QuotaFailed = true; _form.Status = "额度不可用 · 检查登录 / 网络"; }
-                if (!_disposed) Redraw();
-            }
         }
-        finally { _busy = false; }
+        finally { _busy = false; if (_sessionRefreshPending && !_disposed) PollData(); }
+    }
+    private async void PollQuota()
+    {
+        if (_quotaBusy || _disposed || DateTimeOffset.Now < _nextQuota) return;
+        _quotaBusy = true;
+        _nextQuota = DateTimeOffset.Now.AddSeconds(60);
+        try
+        {
+            try { var quota = await _quota.ReadAsync(); if (_disposed) return; _form.Quota = quota; _form.QuotaFailed = false; _form.Status = ""; }
+            catch (Exception ex) when (ex is IOException or OperationCanceledException or JsonException or System.ComponentModel.Win32Exception)
+            {
+                if (_disposed) return;
+                _form.QuotaFailed = true; _form.Status = "额度不可用 · 检查登录 / 网络";
+            }
+            if (!_disposed) Redraw();
+        }
+        finally { _quotaBusy = false; }
     }
     private void OpenSettings()
     {
@@ -417,6 +452,8 @@ internal sealed partial class UsageCardContext : ApplicationContext
     }
     protected override void ExitThreadCore()
     {
+        _route.Changed -= RouteChanged;
+        _sessionTimer.Dispose();
         _disposed = true; _settingsWait?.Unregister(null); _settingsSignal.Dispose(); _settingsDialog?.Close();
         foreach (var hook in _hooks) UnhookWinEvent(hook);
         _timer.Dispose(); _eventTimer.Dispose(); _fade.Dispose(); _hover.Dispose(); _expand.Dispose(); _focus.Dispose();

@@ -15,9 +15,9 @@ flowchart LR
     G --> O[Non-activating layered overlay]
 ```
 
-No web renderer is included. Quota refresh is approximately once a minute while displayed; the helper exits after a read. Session polling is every two seconds, with bounded/coalesced file notifications. Foreground/window events drive visibility and geometry, with fallback checks. Animation timers stop at completion. Configuration edits are debounced and trigger live preview only when changed.
+No web renderer is included. Quota refresh is approximately once a minute while displayed; the helper exits after a read. Session polling is every 500 ms while visible, with bounded/coalesced file notifications. Route changes immediately clear old metrics. Quota reads run independently, and stale session results are discarded. Multiple subscriptions are not treated as proof of the foreground chat. Foreground/window events drive visibility and geometry, with fallback checks. Animation timers stop at completion. Configuration edits are debounced and trigger live preview only when changed.
 
-没有网页渲染器。显示时约每分钟读额度，辅助进程读取后退出；会话每两秒检查，文件通知合并且有上限。窗口事件驱动可见性与位置，另有补偿检查。动画结束即停止，设置预览由变更触发。
+没有网页渲染器。显示时约每分钟读额度，辅助进程读取后退出；显示时会话每 500 毫秒检查，文件通知合并且有上限；路由变化立即清除旧指标，额度独立读取，过期会话结果丢弃。多个订阅不能证明前台聊天身份。窗口事件驱动可见性与位置，另有补偿检查。动画结束即停止，设置预览由变更触发。
 
 Namespaces, the configuration directory, startup registry key and single-instance mutex retain prototype names to keep existing preferences/startup behavior compatible. The public assembly and project are named Codex Rail. Session-log parsing and desktop IPC are version-sensitive; they are not presented as a stable extension API.
 

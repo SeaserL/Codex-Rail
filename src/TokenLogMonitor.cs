@@ -19,6 +19,7 @@ internal sealed class TokenLogMonitor : IDisposable
     private readonly ConcurrentDictionary<string, bool> _rootSessionCache = new(StringComparer.OrdinalIgnoreCase);
     private string? _activeLogPath;
     private DateTime _activeWriteUtc;
+    private long _activeLength = -1;
     private DateTime _lastFullScanUtc = DateTime.MinValue;
     private TokenSnapshot? _lastSnapshot;
     private string? _selectedThreadId;
@@ -28,6 +29,8 @@ internal sealed class TokenLogMonitor : IDisposable
     public string? ActiveThreadId => _selectedThreadId;
 
     public string? PreferredThreadId { get; set; }
+    // The most recently written log is not proof of the visible conversation.
+    public bool RequirePreferredThread { get; set; }
 
     public TokenLogMonitor(string? sessionRoot = null)
     {
@@ -60,6 +63,11 @@ internal sealed class TokenLogMonitor : IDisposable
 
         forceFullScan |= Interlocked.Exchange(ref _rescanNeeded, 0) != 0;
         var usePreferredThread = !PinActiveSession && !string.IsNullOrWhiteSpace(PreferredThreadId);
+        if (RequirePreferredThread && !usePreferredThread)
+        {
+            SwitchActiveLog(null);
+            return null;
+        }
         ProcessChangedPaths(allowAutomaticSwitch: !usePreferredThread);
 
         if (usePreferredThread)
@@ -77,16 +85,19 @@ internal sealed class TokenLogMonitor : IDisposable
         }
 
         DateTime writeUtc;
+        long length;
         try
         {
-            writeUtc = File.GetLastWriteTimeUtc(_activeLogPath);
+            var info = new FileInfo(_activeLogPath);
+            writeUtc = info.LastWriteTimeUtc;
+            length = info.Length;
         }
         catch (IOException)
         {
             return _lastSnapshot;
         }
 
-        if (_lastSnapshot is not null && writeUtc == _activeWriteUtc)
+        if (_lastSnapshot is not null && writeUtc == _activeWriteUtc && length == _activeLength)
         {
             return _lastSnapshot;
         }
@@ -96,6 +107,7 @@ internal sealed class TokenLogMonitor : IDisposable
         {
             // 只有完整解析成功后才提交文件版本，避免卡在写到一半的 JSON 行。
             _activeWriteUtc = writeUtc;
+            _activeLength = length;
             _lastSnapshot = parsed;
         }
 
@@ -291,6 +303,7 @@ internal sealed class TokenLogMonitor : IDisposable
         _activeLogPath = path;
         _selectedThreadId = threadId;
         _activeWriteUtc = DateTime.MinValue;
+        _activeLength = -1;
         _lastSnapshot = null;
         ActiveSessionVersion++;
     }

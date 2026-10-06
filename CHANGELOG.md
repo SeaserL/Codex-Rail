@@ -1,5 +1,16 @@
 # Changelog / 更新记录
 
+## 0.14.1 — session refresh / 会话刷新修复
+
+- Separate quota requests from session reads; a slow quota request no longer blocks chat metrics.
+- Coalesce IPC route changes into immediate refreshes, clear old values on switch/disconnect, and reject reads completed for an obsolete route.
+- Check file length as well as modification time so same-timestamp appends are not missed. Visible session polling is 500 ms; hidden overlays do not poll logs.
+- Stop treating the last IPC subscription replay or most recently written log as proof of the visible conversation. Multiple subscriptions remain ambiguous and show unavailable metrics rather than another chat's numbers.
+
+额度请求与聊天刷新分离；切换时清除旧值并拒绝过期异步结果；追加日志同时校验长度与时间。可见时每 500 ms 检查聊天数据，隐藏时不轮询日志。
+
+重要限制：Codex IPC 提供订阅状态，并不保证提供当前查看的对话。多段订阅时本版显示“当前会话未确认”和 `—`，不会猜测最后一条订阅或最近写入的日志。不能据此宣称所有切换都已自动识别。
+
 ## 0.14.0 — initial public candidate / 首次公开候选
 
 - Mixed numeric, bar, battery and ring modules; up to 3 columns / 16 rows.

@@ -18,12 +18,12 @@ internal sealed class CodexIpcActiveThreadMonitor : IDisposable
     private string? _activeThreadId;
     private string? _lastError;
     private bool _isConnected;
-    private long _sequence;
     private long _version;
+    internal event Action? Changed;
 
-    public CodexIpcActiveThreadMonitor()
+    public CodexIpcActiveThreadMonitor(bool connect = true)
     {
-        _runner = Task.Run(() => RunAsync(_cancellation.Token));
+        _runner = connect ? Task.Run(() => RunAsync(_cancellation.Token)) : Task.CompletedTask;
     }
 
     public ActiveThreadRouteStatus GetStatus()
@@ -32,7 +32,7 @@ internal sealed class CodexIpcActiveThreadMonitor : IDisposable
         {
             return new ActiveThreadRouteStatus(
                 _activeThreadId,
-                _activeByWindow.Count,
+                _activeByWindow.Keys.Select(key => key[..key.LastIndexOf('\u001f')]).Distinct().Count(),
                 _isConnected,
                 _version,
                 _lastError);
@@ -134,7 +134,14 @@ internal sealed class CodexIpcActiveThreadMonitor : IDisposable
         await pipe.FlushAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private void ProcessFrame(byte[] payload)
+    internal void ProcessFrame(byte[] payload)
+    {
+        var before = GetStatus().Version;
+        ProcessFrameCore(payload);
+        if (GetStatus().Version != before) Changed?.Invoke();
+    }
+
+    private void ProcessFrameCore(byte[] payload)
     {
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
@@ -153,6 +160,12 @@ internal sealed class CodexIpcActiveThreadMonitor : IDisposable
         if (methodName == "client-status-changed")
         {
             ProcessClientStatusChanged(parameters);
+            return;
+        }
+
+        if (methodName == "ipc-connection-reset")
+        {
+            MarkDisconnected(null, raiseEvent: false);
             return;
         }
 
@@ -180,12 +193,12 @@ internal sealed class CodexIpcActiveThreadMonitor : IDisposable
             return;
         }
 
-        var key = $"{sourceClientId}\u001f{hostId}";
+        var key = $"{sourceClientId}\u001f{hostId}\u001f{conversationId}";
         lock (_sync)
         {
             if (followingElement.GetBoolean())
             {
-                _activeByWindow[key] = new ActiveConversation(conversationId, ++_sequence);
+                _activeByWindow[key] = new ActiveConversation(conversationId, hostId);
             }
             else if (_activeByWindow.TryGetValue(key, out var active)
                 && active.ThreadId.Equals(conversationId, StringComparison.OrdinalIgnoreCase))
@@ -238,8 +251,9 @@ internal sealed class CodexIpcActiveThreadMonitor : IDisposable
         }
     }
 
-    private void MarkDisconnected(string? error)
+    private void MarkDisconnected(string? error, bool raiseEvent = true)
     {
+        bool notify;
         lock (_sync)
         {
             var changed = _isConnected || _activeByWindow.Count > 0 || _activeThreadId is not null;
@@ -254,15 +268,17 @@ internal sealed class CodexIpcActiveThreadMonitor : IDisposable
             {
                 _version++;
             }
+            notify = changed;
         }
+        if (notify && raiseEvent) Changed?.Invoke();
     }
 
     private void RecomputeActiveThread()
     {
-        var nextThreadId = _activeByWindow.Values
-            .OrderByDescending(item => item.Sequence)
-            .Select(item => item.ThreadId)
-            .FirstOrDefault();
+        // IPC reports subscriptions, not foreground navigation. Never pick the
+        // last replayed/background thread when several conversations are followed.
+        var candidates = _activeByWindow.Values.Distinct().Take(2).ToArray();
+        var nextThreadId = candidates.Length == 1 && candidates[0].HostId == "local" ? candidates[0].ThreadId : null;
         if (!string.Equals(nextThreadId, _activeThreadId, StringComparison.OrdinalIgnoreCase))
         {
             _activeThreadId = nextThreadId;
@@ -320,5 +336,5 @@ internal sealed class CodexIpcActiveThreadMonitor : IDisposable
     }
 
     private int _disposed;
-    private sealed record ActiveConversation(string ThreadId, long Sequence);
+    private sealed record ActiveConversation(string ThreadId, string HostId);
 }
