@@ -14,6 +14,8 @@ internal sealed partial class UsageCardContext : ApplicationContext
     private readonly TokenLogMonitor _tokens;
     private readonly SessionVitalsMonitor _vitals = new();
     private readonly NotifyIcon _tray;
+    private readonly ContextMenuStrip _menu;
+    private readonly MenuDismissController _menuDismiss;
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 2000 };
     private readonly System.Windows.Forms.Timer _eventTimer = new() { Interval = 16 };
     private readonly System.Windows.Forms.Timer _fade = new() { Interval = 16 };
@@ -112,11 +114,25 @@ internal sealed partial class UsageCardContext : ApplicationContext
         _form.Settings = _settings; _form.Details = false;
         _tokens = new TokenLogMonitor(sessionRoot) { RequirePreferredThread = true };
         _ = _form.Handle;
-        var menu = new ContextMenuStrip();
+        var menu = _menu = new ContextMenuStrip();
+        _menuDismiss = new(menu);
         menu.Items.Add("立即刷新额度", null, (_, _) => { _nextQuota = DateTimeOffset.MinValue; PollData(); });
         menu.Items.Add("控制面板…", null, (_, _) => _form.BeginInvoke(() => OpenSettings()));
         menu.Opening += (_, _) => { _menuOpen = true; _expand.Stop(); _fade.Stop(); };
-        menu.Closed += (_, _) => { _menuOpen = false; _hoverSince = _leaveSince = default; _alpha = 255; if (!_settingsOpen && Math.Abs(_form.Expansion - _expandTarget) > .001) AnimateDetails(_expandTarget > 0); };
+        menu.Closed += (_, _) =>
+        {
+            _menuOpen = false; _hoverSince = _leaveSince = default; _alpha = 255;
+            _form.BeginInvoke(() =>
+            {
+                if (_disposed || _menuOpen) return;
+                Synchronize(); Redraw();
+                if (_form.Visible && !_settingsOpen)
+                {
+                    var expand = ActiveSettings.HoverDetails && _form.Bounds.Contains(Cursor.Position);
+                    if (Math.Abs(_form.Expansion - (expand ? 1 : 0)) > .001) AnimateDetails(expand);
+                }
+            });
+        };
         _settingsWait = ThreadPool.RegisterWaitForSingleObject(_settingsSignal, (_, _) => { if (!_disposed) try { _form.BeginInvoke(() => OpenSettings()); } catch (InvalidOperationException) { } }, null, Timeout.Infinite, false);
 
         menu.Items.Add("重置到窄栏", null, (_, _) => { _settings.HorizontalOffset = 0; _settings.BottomDip = 110; Save(); Synchronize(); });
@@ -300,6 +316,7 @@ internal sealed partial class UsageCardContext : ApplicationContext
     private void Hide(bool force = false)
     {
         if (!force && (_menuOpen || _settingsOpen)) return;
+        if (_menu.Visible && _menu.SourceControl == _form) _menu.Close(ToolStripDropDownCloseReason.AppFocusChange);
         _page.SetTarget(IntPtr.Zero);
         if (!_form.Visible) return;
         _form.Capture = false; _fade.Stop(); _expand.Stop(); _expandTarget = 0; _form.Hide(); _form.Details = false; _hoverSince = _leaveSince = default; _hiddenSince = DateTimeOffset.Now;
@@ -475,7 +492,7 @@ internal sealed partial class UsageCardContext : ApplicationContext
         foreach (var hook in _hooks) UnhookWinEvent(hook);
         _timer.Dispose(); _eventTimer.Dispose(); _fade.Dispose(); _hover.Dispose(); _expand.Dispose(); _focus.Dispose();
         _quota.Dispose(); _page.Dispose(); _tokens.Dispose();
-        _tray.Visible = false; _tray.Dispose(); _form.Dispose();
+        _menuDismiss.Dispose(); _tray.Visible = false; _tray.Dispose(); _menu.Dispose(); _form.Dispose();
         base.ExitThreadCore();
     }
     private delegate void WinEvent(IntPtr hook, uint ev, IntPtr hwnd, int objectId, int childId, uint thread, uint time);

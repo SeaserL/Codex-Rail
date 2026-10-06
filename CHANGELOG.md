@@ -1,5 +1,11 @@
 # Changelog / 更新记录
 
+## 0.14.5 — menu dismissal / 右键菜单关闭
+
+- Dismiss the nonactivating overlay menu on outside mouse-down, Escape and a foreground application change. Outside clicks continue to the original target.
+- Attach low-level input hooks only while the menu is open and release them on close/dispose. Keep native AutoClose and reject stale queued dismissal after reopen.
+- Close overlay-owned menus when hiding the overlay; tray menus can remain usable while Codex is in the background. Resume rendering and hover according to cursor position after dismissal.
+- 点击菜单外、Esc 和切换应用可收起右键菜单；菜单打开期间暂停悬停展开，关闭后恢复。新增监听仅在菜单打开时存在。
 ## 0.14.4 — data transitions / 数据切换动效
 
 - Blend changed metrics over 140 ms using premultiplied pixels; rapid changes continue from the displayed frame. Stop the animation timer when idle or hidden.
