@@ -25,3 +25,5 @@ For public bug reports, remove account identifiers, thread IDs, local paths and 
 Page identity reads the host window’s primary document title through native UI Automation and uniquely matches it to the local SQLite catalog. It does not read chat UI text, require a debugger, modify Codex, or upload titles. Duplicate titles remain unconfirmed. No WPF/database package is added; Windows supplies UIA and SQLite.
 
 页面识别只读取宿主主文档标题，并与本地目录唯一匹配，不读取聊天界面的正文、不打开调试器、不改 Codex、不上传标题。同名不猜测。使用系统原生 UIA/SQLite，不添加 WPF 或数据库依赖。
+
+While a context menu is open, temporary Windows low-level hooks inspect mouse-down coordinates and Escape key-down solely to dismiss that menu. No input history or text is recorded or uploaded; the hooks are removed when the menu closes. / 右键菜单打开期间临时监听鼠标按下位置和 Esc，只用于收起菜单，不记录或上传输入历史，关闭菜单后移除监听。

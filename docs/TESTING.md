@@ -19,3 +19,5 @@ Resource notes: a 120-frame constant-size fade reused one native surface allocat
 Run `./test.ps1` for synthetic regression checks. `--performance` additionally reads the signed-in account quota; hosted CI deliberately excludes that probe. README media uses fixture data, and the hover GIF is renderer-generated, not a recording of real hover detection or Windows compositor behavior.
 
 `./test.ps1` 只运行合成回归。`--performance` 会额外读取当前登录账户额度，CI 不运行该探针。动图是示例渲染，不是鼠标悬停判定或 Windows 合成器录屏。
+
+0.14.5 adds regressions for unique/ambiguous read-only page catalog lookup, stale session reads, premultiplied data transitions and temporary menu-hook lifecycle. Native menu tests install hooks and inject controller observations; they do not claim end-to-end clicks on Codex or the tray. / 0.14.5 新增页面目录匹配、过期读取、像素过渡和菜单监听生命周期回归；菜单测试不代替人工在 Codex/托盘上的完整操作验证。
