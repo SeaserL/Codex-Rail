@@ -63,7 +63,7 @@ This is an **external overlay**, not an official Codex extension or a mounted si
 ./test.ps1
 ```
 
-Requires Windows and the .NET 10 SDK. Production and test code are separate. See [contributing](CONTRIBUTING.md), [architecture](docs/ARCHITECTURE.md) and [release notes](CHANGELOG.md). The repository includes build/test automation; hosted CI results will only exist after it is uploaded.
+Requires Windows and the .NET 10 SDK. Production and test code are separate. See [contributing](CONTRIBUTING.md), [architecture](docs/ARCHITECTURE.md) and [release notes](CHANGELOG.md). [GitHub Actions](https://github.com/SeaserL/Codex-Rail/actions) runs build/test validation; version tags create release drafts for review.
 
 <details>
 <summary><strong>Why this project hopes to disappear</strong></summary>

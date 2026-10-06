@@ -15,5 +15,6 @@
     "sidebar"
   ],
   "visibility": "public",
-  "publication_status": "prepared locally; not uploaded"
+  "repository": "https://github.com/SeaserL/Codex-Rail",
+  "publication_status": "public source; tagged builds create draft releases"
 }
