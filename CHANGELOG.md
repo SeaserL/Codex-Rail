@@ -1,5 +1,11 @@
 # Changelog / 更新记录
 
+## 0.14.4 — data transitions / 数据切换动效
+
+- Blend changed metrics over 140 ms using premultiplied pixels; rapid changes continue from the displayed frame. Stop the animation timer when idle or hidden.
+- Coalesce the first 120 ms of session switching to avoid a brief unavailable frame when fresh data is ready quickly. Reserve number widths to reduce font-size jumps.
+- Keep geometry and native surface allocations stable during data changes; include session source in the render cache key.
+- 数据变化采用短过渡，快速切换合并中间空白帧，数字预留排版宽度；隐藏和静止时停止动效计时器。
 ## 0.14.3 — page identity / 页面识别
 
 - Replace production subscription/recent-log routing with native UI Automation document title + unique local catalog matching. No Codex patch, debugger, WPF or database package.

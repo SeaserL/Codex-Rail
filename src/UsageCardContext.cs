@@ -46,6 +46,8 @@ internal sealed partial class UsageCardContext : ApplicationContext
     private bool _busy, _hidden, _disposed;
     private bool _quotaBusy, _sessionRefreshPending;
     private readonly System.Windows.Forms.Timer _sessionTimer = new() { Interval = 500 };
+    private readonly System.Windows.Forms.Timer _sessionPlaceholder = new() { Interval = 120 };
+    private bool _awaitingSession;
     private int _eventPending;
     private int _fadeStart;
     private byte _alpha = 255;
@@ -196,6 +198,7 @@ internal sealed partial class UsageCardContext : ApplicationContext
 };
         _focus.Tick += (_, _) => { if (_disposed) return; if (!CheckFocus()) Hide(true); else if (_form.Visible && !_form.Capture && !_menuOpen && Environment.TickCount - _themeStart >= 150) { _themeStart = Environment.TickCount; RefreshTheme(); } }; _focus.Start();
         _page.Changed += RouteChanged;
+        _sessionPlaceholder.Tick += (_, _) => { _sessionPlaceholder.Stop(); if (_awaitingSession) { Redraw(true); PollData(); } };
         _sessionTimer.Tick += (_, _) => PollData();
         _sessionTimer.Start();
         _hover.Start(); _timer.Start(); Synchronize(); PollData();
@@ -207,11 +210,12 @@ internal sealed partial class UsageCardContext : ApplicationContext
         {
             if (_disposed) return;
             _sessionRefreshPending = true;
+            _awaitingSession = true;
             // Clear immediately: the previous conversation must not remain on screen.
             _form.Tokens = null;
             _form.SessionSource = "页面会话未确认";
             _form.Vitals = new("未知", "", "等待数据", null, null, null);
-            Redraw();
+            _sessionPlaceholder.Stop(); _sessionPlaceholder.Start();
             PollData();
         }); }
         catch (InvalidOperationException) { }
@@ -307,10 +311,11 @@ internal sealed partial class UsageCardContext : ApplicationContext
     }
     private void OnDetails() { _form.Rebuild(_dpi == 0 ? 96 : _dpi); Synchronize(); if (_form.Visible) _form.Present(_position, _alpha); }
     private void Save() => File.WriteAllText(Path.Combine(DataDir, "settings.json"), JsonSerializer.Serialize(_settings, new JsonSerializerOptions { WriteIndented = true }));
-    private void Redraw()
+    private void Redraw(bool animate = false)
     {
+        if (_awaitingSession && _sessionPlaceholder.Enabled) return;
         if (!_form.Visible || _form.Capture || _menuOpen || (_settingsOpen && !_livePreview)) return;
-        _form.Rebuild(_dpi); _form.Present(_position, _alpha);
+        _form.Rebuild(_dpi, animate); _form.Present(_position, _alpha);
     }
     private async void PollData()
     {
@@ -322,12 +327,14 @@ internal sealed partial class UsageCardContext : ApplicationContext
         try
         {
             var route = _page.GetStatus();
+            if (_awaitingSession && _sessionPlaceholder.Enabled && route.ThreadId is null) return;
             _tokens.PreferredThreadId = route.ThreadId;
             TokenSnapshot? token;
             try { token = await Task.Run(() => _tokens.Poll()); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { token = null; }
             if (_disposed) return;
             if (_page.GetStatus().Version != route.Version) { _sessionRefreshPending = true; return; }
+            if (_awaitingSession && _sessionPlaceholder.Enabled && token is null) return;
             SessionVitals vitals;
             try { vitals = await Task.Run(() => _vitals.Poll(token?.LogPath)); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { vitals = new("未知", "", "数据暂不可用", null, null, null); }
@@ -335,8 +342,10 @@ internal sealed partial class UsageCardContext : ApplicationContext
             if (route.ThreadId is null) vitals = vitals with { State = sessionSource };
             if (_disposed) return;
             if (_page.GetStatus().Version != route.Version) { _sessionRefreshPending = true; return; }
-            if (_form.Tokens != token || _form.Vitals != vitals || _form.SessionSource != sessionSource)
-            { _form.Tokens = token; _form.Vitals = vitals; _form.SessionSource = sessionSource; Redraw(); }
+            var changed = _awaitingSession || _form.Tokens != token || _form.Vitals != vitals || _form.SessionSource != sessionSource;
+            _awaitingSession = false; _sessionPlaceholder.Stop();
+            if (changed)
+            { _form.Tokens = token; _form.Vitals = vitals; _form.SessionSource = sessionSource; Redraw(true); }
         }
         finally { _busy = false; if (_sessionRefreshPending && !_disposed) PollData(); }
     }
@@ -461,6 +470,7 @@ internal sealed partial class UsageCardContext : ApplicationContext
     {
         _page.Changed -= RouteChanged;
         _sessionTimer.Dispose();
+        _sessionPlaceholder.Dispose();
         _disposed = true; _settingsWait?.Unregister(null); _settingsSignal.Dispose(); _settingsDialog?.Close();
         foreach (var hook in _hooks) UnhookWinEvent(hook);
         _timer.Dispose(); _eventTimer.Dispose(); _fade.Dispose(); _hover.Dispose(); _expand.Dispose(); _focus.Dispose();

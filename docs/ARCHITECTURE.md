@@ -22,3 +22,5 @@ No web renderer is included. Quota refresh is approximately once a minute while 
 Namespaces, the configuration directory, startup registry key and single-instance mutex retain prototype names to keep existing preferences/startup behavior compatible. The public assembly and project are named Codex Rail. Session-log parsing and desktop IPC are version-sensitive; they are not presented as a stable extension API.
 
 命名空间、配置目录、启动项和互斥锁保留历史标识以兼容已有设置；公开项目与程序集名为 Codex Rail。日志和 IPC 有版本依赖，不把它们宣传为稳定的插件 API。
+
+Data changes blend premultiplied native pixels for 140 ms without resizing the window. A 120 ms switch grace period coalesces quickly available session data; unavailable identity still clears after that period. Numeric width reserves reduce font changes. The transition timer stops on completion or hide; its three temporary pixel buffers are released. Layout/DPI changes render directly.

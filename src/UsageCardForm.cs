@@ -58,6 +58,14 @@ internal sealed class UsageCardForm : Form
     }
     public UsageCardForm()
     {
+        _dataTimer.Tick += (_, _) =>
+        {
+            if (!Visible || !DataTransitionActive) { StopDataTransition(); return; }
+            var progress = Math.Clamp((Environment.TickCount64 - _blendStarted) / 140d, 0, 1);
+            if (progress >= 1) StopDataTransition();
+            else MixPixels(_blendFrom!, _blendTo!, _blendFrame!, progress * progress * (3 - 2 * progress));
+            _surfaceDirty = true; Present(PresentedPosition, _lastAlpha);
+        };
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.Manual;
@@ -89,11 +97,55 @@ internal sealed class UsageCardForm : Form
     }
     protected override void OnPaint(PaintEventArgs e) { }
     protected override void OnPaintBackground(PaintEventArgs e) { }
-    public void Rebuild(uint dpi)
+    private readonly System.Windows.Forms.Timer _dataTimer = new() { Interval = 16 };
+    private byte[]? _blendFrom, _blendTo, _blendFrame;
+    private long _blendStarted;
+    internal bool DataTransitionActive => _blendFrom is not null;
+    private byte _lastAlpha = 255;
+    public void Rebuild(uint dpi, bool animate = false)
     {
+        var oldDpi = _dpi;
         _dpi = dpi == 0 ? 96 : dpi;
-        _bitmap?.Dispose();
-        _bitmap = Render(_dpi, interactive: true); _surfaceDirty = true;
+        var previous = _bitmap;
+        var next = Render(_dpi, interactive: true);
+        if (animate && Visible && previous is not null && previous.Size == next.Size && oldDpi == _dpi)
+        {
+            var target = Pixels(next);
+            if (!DataTransitionActive || !_blendTo!.AsSpan().SequenceEqual(target))
+            {
+                var source = DataTransitionActive ? (byte[])_blendFrame!.Clone() : Pixels(previous);
+                StopDataTransition();
+                if (!source.AsSpan().SequenceEqual(target))
+                {
+                    _blendFrom = source; _blendTo = target; _blendFrame = (byte[])source.Clone();
+                    _blendStarted = Environment.TickCount64; _dataTimer.Start();
+                }
+            }
+        }
+        else StopDataTransition();
+        _bitmap = next; previous?.Dispose(); _surfaceDirty = true;
+    }
+    private static byte[] Pixels(Bitmap bitmap)
+    {
+        var bytes = new byte[bitmap.Width * bitmap.Height * 4];
+        var bits = bitmap.LockBits(new Rectangle(Point.Empty, bitmap.Size), ImageLockMode.ReadOnly, PixelFormat.Format32bppPArgb);
+        try { for (var row = 0; row < bitmap.Height; row++) Marshal.Copy(bits.Scan0 + row * bits.Stride, bytes, row * bitmap.Width * 4, bitmap.Width * 4); }
+        finally { bitmap.UnlockBits(bits); }
+        return bytes;
+    }
+    internal static void MixPixels(byte[] from, byte[] to, byte[] result, double progress)
+    {
+        var weight = (int)Math.Round(Math.Clamp(progress, 0, 1) * 256);
+        for (var i = 0; i < result.Length; i++) result[i] = (byte)((from[i] * (256 - weight) + to[i] * weight + 128) >> 8);
+    }
+    private void StopDataTransition()
+    {
+        _dataTimer.Stop(); _blendFrom = _blendTo = _blendFrame = null; _surfaceDirty = true;
+    }
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        if (!Visible) StopDataTransition();
+        base.OnVisibleChanged(e);
     }
     private PrivateFontCollection? _privateFonts;
     private FontFamily? _privateFontFamily;
@@ -117,14 +169,14 @@ internal sealed class UsageCardForm : Form
         _fontCache[size] = cached; return cached;
     }
     private void ImageBackground(Graphics g, RectangleF rect) { if (_imageAsset != DisplaySettings.BackgroundImage) { _backgroundImage?.Dispose(); _imageAsset = DisplaySettings.BackgroundImage; _backgroundImage = AssetStore.LoadImage(_imageAsset); } if (_backgroundImage == null || DisplaySettings.ImageOpacity == 0) return; var state = g.Save(); using var path = Round(rect, 4); g.SetClip(path, CombineMode.Intersect); var scale = Math.Max(rect.Width / _backgroundImage.Width, rect.Height / _backgroundImage.Height); var sourceWidth = rect.Width / scale; var sourceHeight = rect.Height / scale; using var attributes = new ImageAttributes(); var matrix = new ColorMatrix { Matrix33 = DisplaySettings.ImageOpacity / 255f }; attributes.SetColorMatrix(matrix); g.DrawImage(_backgroundImage, Rectangle.Round(rect), (_backgroundImage.Width - sourceWidth) / 2, (_backgroundImage.Height - sourceHeight) / 2, sourceWidth, sourceHeight, GraphicsUnit.Pixel, attributes); g.Restore(state); }
-    private sealed record RenderSignature(string Appearance, TokenSnapshot? Tokens, QuotaData? Quota, SessionVitals? Vitals, string Status, bool Light, bool Failed, uint Dpi, bool Interactive, long Minute);
+    private sealed record RenderSignature(string Appearance, TokenSnapshot? Tokens, QuotaData? Quota, SessionVitals? Vitals, string Status, string Source, bool Light, bool Failed, uint Dpi, bool Interactive, long Minute);
     private RenderSignature? _renderSignature;
     private Bitmap? _renderCache;
     private bool _cacheExpanded;
     public Bitmap Render(uint dpi, bool interactive = false)
     {
         UpdateLayout();
-        var signature = new RenderSignature(System.Text.Json.JsonSerializer.Serialize(DisplaySettings) + $"|{HeightDip}|{UiText.IsEnglish}|{_page}", Tokens, Quota, Vitals, Status, Light, QuotaFailed, dpi, interactive, DateTimeOffset.Now.ToUnixTimeSeconds() / 60);
+        var signature = new RenderSignature(System.Text.Json.JsonSerializer.Serialize(DisplaySettings) + $"|{HeightDip}|{UiText.IsEnglish}|{_page}", Tokens, Quota, Vitals, Status, SessionSource, Light, QuotaFailed, dpi, interactive, DateTimeOffset.Now.ToUnixTimeSeconds() / 60);
         if (signature != _renderSignature || (!_cacheExpanded && Expansion > 0))
         {
             _renderCache?.Dispose(); _renderCache = null; _cacheExpanded = Expansion > 0;
@@ -171,6 +223,10 @@ internal sealed class UsageCardForm : Form
             for (var i = 0; i < items.Count; i++)
             {
                 var m = items[i];
+                string? reserve = m.Module.Metric is MetricKind.模型 or MetricKind.任务状态 ? null
+                    : m.Module.Metric is MetricKind.平均输出速度 ? "888t/s"
+                    : m.Module.Metric is MetricKind.首Token等待 ? "88.8s"
+                    : m.Module.Metric is MetricKind.聊天Token or MetricKind.输入Token or MetricKind.输出Token or MetricKind.推理Token or MetricKind.缓存Token or MetricKind.上下文Token or MetricKind.上下文容量 ? "888K" : "88.8%";
                 var alert = IsQuotaLow(m.Module.Metric, m.Percent);
                 var accent = alert ? DisplaySettings.Warning : DisplaySettings.Accent;
                 var valueColor = alert ? DisplaySettings.Warning : text;
@@ -188,8 +244,8 @@ internal sealed class UsageCardForm : Form
                 var top = y + (outside ? 18 : 2);
                 var bottom = y + ch - (DisplaySettings.ShowLabels ? 20 : 3);
                 var gaugeHeight = Math.Max(20, bottom - top);
-                if (m.Module.Style == GaugeStyle.数值) { FitNumber(g, m.Value, new RectangleF(x, y + 3, cw, ch - (DisplaySettings.ShowLabels ? 23 : 6)), 14, valueColor, numberAlign); if (DisplaySettings.ShowLabels) TextAt(g, m.Name, new RectangleF(x, y + ch - 18, cw, 18), 9, muted, true); continue; }
-                if (outside) FitNumber(g, m.Value, new RectangleF(x - 1, y, cw + 2, 18), 10, valueColor);
+                if (m.Module.Style == GaugeStyle.数值) { FitNumber(g, m.Value, new RectangleF(x, y + 3, cw, ch - (DisplaySettings.ShowLabels ? 23 : 6)), 14, valueColor, numberAlign, reserve); if (DisplaySettings.ShowLabels) TextAt(g, m.Name, new RectangleF(x, y + ch - 18, cw, 18), 9, muted, true); continue; }
+                if (outside) FitNumber(g, m.Value, new RectangleF(x - 1, y, cw + 2, 18), 10, valueColor, reserve: reserve);
                 if (m.Percent is not null || m.IsPercent)
                 {
                     if (m.Module.Style == GaugeStyle.环形)
@@ -200,7 +256,7 @@ internal sealed class UsageCardForm : Form
                         var stroke = Math.Min(DisplaySettings.RingWidth, Math.Max(1, diameter / 3)); if (DisplaySettings.Material) { using var shadow = new Pen(Color.FromArgb(65, Color.Black), stroke + 2); g.DrawEllipse(shadow, rect.X + 1, rect.Y + 2, rect.Width, rect.Height); }
                         using var pen = new Pen(gaugeTrack, stroke); g.DrawEllipse(pen, rect);
                         if (m.Percent is > 0) { pen.Color = accent; pen.StartCap = pen.EndCap = LineCap.Round; g.DrawArc(pen, rect, -90, (float)(Math.Clamp(m.Percent.Value, 0, 100) * 3.6)); }
-                        if (DisplaySettings.ShowValues && m.Module.RingValue == RingValuePosition.环内) { var inset = Math.Min(rect.Width / 3, stroke / 2 + 2); FitNumber(g, m.Value.TrimEnd('%'), new RectangleF(rect.X + inset, rect.Y + inset, Math.Max(1, rect.Width - inset * 2), Math.Max(1, rect.Height - inset * 2)), 10, valueColor); }
+                        if (DisplaySettings.ShowValues && m.Module.RingValue == RingValuePosition.环内) { var inset = Math.Min(rect.Width / 3, stroke / 2 + 2); FitNumber(g, m.Value.TrimEnd('%'), new RectangleF(rect.X + inset, rect.Y + inset, Math.Max(1, rect.Width - inset * 2), Math.Max(1, rect.Height - inset * 2)), 10, valueColor, reserve: reserve?.TrimEnd('%')); }
                     }
                     else if (m.Module.Style == GaugeStyle.电量条)
                     {
@@ -309,7 +365,7 @@ internal sealed class UsageCardForm : Form
         }
         return list;
     }
-    private void FitNumber(Graphics g, string value, RectangleF bounds, float size, Color color, StringAlignment alignment = StringAlignment.Center)
+    private void FitNumber(Graphics g, string value, RectangleF bounds, float size, Color color, StringAlignment alignment = StringAlignment.Center, string? reserve = null)
     {
         value = UiText.T(value);
         using var format = new StringFormat { FormatFlags = StringFormatFlags.NoWrap, Alignment = alignment, LineAlignment = StringAlignment.Center, Trimming = StringTrimming.None };
@@ -317,7 +373,7 @@ internal sealed class UsageCardForm : Form
         for (var current = size; current >= 2; current -= .5f)
         {
             var font = MakeFont(current);
-            if (g.MeasureString(value, font, 1000, format).Width <= bounds.Width || current <= 2)
+            if (Math.Max(g.MeasureString(value, font, 1000, format).Width, reserve is null ? 0 : g.MeasureString(reserve, font, 1000, format).Width) <= bounds.Width || current <= 2)
             { g.DrawString(value, font, brush, bounds, format); return; }
         }
     }
@@ -382,6 +438,7 @@ internal sealed class UsageCardForm : Form
     }
     public void Present(Point position, byte alpha)
     {
+        _lastAlpha = alpha;
         if(_bitmap is null)Rebuild(_dpi);var bitmap=_bitmap!;var screen=GetDC(IntPtr.Zero);
         try
         {
@@ -395,9 +452,14 @@ internal sealed class UsageCardForm : Form
             }
             if(_surfaceDirty)
             {
-                var data=bitmap.LockBits(new Rectangle(Point.Empty,bitmap.Size),ImageLockMode.ReadOnly,PixelFormat.Format32bppPArgb);
-                try{for(var row=0;row<bitmap.Height;row++)CopyMemory(_surfacePixels+row*bitmap.Width*4,data.Scan0+row*data.Stride,(nuint)(bitmap.Width*4));}
-                finally{bitmap.UnlockBits(data);}_surfaceDirty=false;SurfaceCopies++;
+                if (DataTransitionActive) Marshal.Copy(_blendFrame!, 0, _surfacePixels, _blendFrame!.Length);
+                else
+                {
+                    var data=bitmap.LockBits(new Rectangle(Point.Empty,bitmap.Size),ImageLockMode.ReadOnly,PixelFormat.Format32bppPArgb);
+                    try{for(var row=0;row<bitmap.Height;row++)CopyMemory(_surfacePixels+row*bitmap.Width*4,data.Scan0+row*data.Stride,(nuint)(bitmap.Width*4));}
+                    finally{bitmap.UnlockBits(data);}
+                }
+                _surfaceDirty=false;SurfaceCopies++;
             }
             var size=new NativeSize(bitmap.Width,bitmap.Height);var destination=new NativePoint(position.X,position.Y);var source=new NativePoint(0,0);var blend=new Blend{SourceConstantAlpha=alpha,AlphaFormat=1};
             if(!UpdateLayeredWindow(Handle,screen,ref destination,ref size,_surfaceDc,ref source,0,ref blend,2))throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
@@ -405,7 +467,7 @@ internal sealed class UsageCardForm : Form
         }
         finally{ReleaseDC(IntPtr.Zero,screen);}
     }
-    protected override void Dispose(bool disposing){if(disposing){ReleaseSurface();_bitmap?.Dispose();_renderCache?.Dispose();ClearFonts();_backgroundImage?.Dispose();}base.Dispose(disposing);}
+    protected override void Dispose(bool disposing){if(disposing){StopDataTransition();_dataTimer.Dispose();ReleaseSurface();_bitmap?.Dispose();_renderCache?.Dispose();ClearFonts();_backgroundImage?.Dispose();}base.Dispose(disposing);}
     [StructLayout(LayoutKind.Sequential)] private struct BitmapHeader { public uint Size; public int Width, Height; public ushort Planes, Bits; public uint Compression, ImageSize; public int XPixels, YPixels; public uint Colors, Important; }
     [DllImport("gdi32.dll")] private static extern IntPtr CreateDIBSection(IntPtr dc, ref BitmapHeader header, uint usage, out IntPtr pixels, IntPtr section, uint offset);
     [DllImport("ntdll.dll", EntryPoint = "RtlMoveMemory")] private static extern void CopyMemory(IntPtr destination, IntPtr source, nuint length);
