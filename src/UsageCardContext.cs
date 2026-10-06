@@ -10,7 +10,7 @@ internal sealed partial class UsageCardContext : ApplicationContext
     private static readonly string DataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexUsageCardLocal");
     private readonly UsageCardForm _form = new();
     private readonly QuotaClient _quota = new();
-    private readonly CodexIpcActiveThreadMonitor _route = new();
+    private readonly CodexPageThreadMonitor _page;
     private readonly TokenLogMonitor _tokens;
     private readonly SessionVitalsMonitor _vitals = new();
     private readonly NotifyIcon _tray;
@@ -56,6 +56,7 @@ internal sealed partial class UsageCardContext : ApplicationContext
 
     public UsageCardContext(string sessionRoot)
     {
+        _page = new CodexPageThreadMonitor(Path.Combine(Path.GetDirectoryName(sessionRoot)!, "state_5.sqlite"));
         Directory.CreateDirectory(DataDir);
         try { _settings = JsonSerializer.Deserialize<UsageCardSettings>(File.ReadAllText(Path.Combine(DataDir, "settings.json"))) ?? new(); }
         catch (Exception ex) when (ex is IOException or JsonException) { _settings = new(); }
@@ -107,7 +108,7 @@ internal sealed partial class UsageCardContext : ApplicationContext
         UiText.Language = _settings.Language;
         Save();
         _form.Settings = _settings; _form.Details = false;
-        _tokens = new TokenLogMonitor(sessionRoot);
+        _tokens = new TokenLogMonitor(sessionRoot) { RequirePreferredThread = true };
         _ = _form.Handle;
         var menu = new ContextMenuStrip();
         menu.Items.Add("立即刷新额度", null, (_, _) => { _nextQuota = DateTimeOffset.MinValue; PollData(); });
@@ -194,7 +195,7 @@ internal sealed partial class UsageCardContext : ApplicationContext
     OnDetails(); if (progress >= 1) _expand.Stop();
 };
         _focus.Tick += (_, _) => { if (_disposed) return; if (!CheckFocus()) Hide(true); else if (_form.Visible && !_form.Capture && !_menuOpen && Environment.TickCount - _themeStart >= 150) { _themeStart = Environment.TickCount; RefreshTheme(); } }; _focus.Start();
-        _route.Changed += RouteChanged;
+        _page.Changed += RouteChanged;
         _sessionTimer.Tick += (_, _) => PollData();
         _sessionTimer.Start();
         _hover.Start(); _timer.Start(); Synchronize(); PollData();
@@ -208,6 +209,7 @@ internal sealed partial class UsageCardContext : ApplicationContext
             _sessionRefreshPending = true;
             // Clear immediately: the previous conversation must not remain on screen.
             _form.Tokens = null;
+            _form.SessionSource = "页面会话未确认";
             _form.Vitals = new("未知", "", "等待数据", null, null, null);
             Redraw();
             PollData();
@@ -255,6 +257,7 @@ internal sealed partial class UsageCardContext : ApplicationContext
         if (_target is null || !CodexWindowLocator.TryRefreshKnownCodexTarget(_target, out var target)) { Hide(true); return; }
         _target = target;
         var host = _target.HostWindow;
+        _page.SetTarget(host.Handle);
         var bounds = host.ExtendedFrameBounds;
         var scale = host.Dpi / 96d;
         var origin = new Point(0, 0); ClientToScreen(host.Handle, ref origin); _clientLeft = origin.X;
@@ -292,7 +295,9 @@ internal sealed partial class UsageCardContext : ApplicationContext
     }
     private void Hide(bool force = false)
     {
-        if (!_form.Visible || (!force && (_menuOpen || _settingsOpen))) return;
+        if (!force && (_menuOpen || _settingsOpen)) return;
+        _page.SetTarget(IntPtr.Zero);
+        if (!_form.Visible) return;
         _form.Capture = false; _fade.Stop(); _expand.Stop(); _expandTarget = 0; _form.Hide(); _form.Details = false; _hoverSince = _leaveSince = default; _hiddenSince = DateTimeOffset.Now;
     }
     private void AnimateDetails(bool expanded)
@@ -316,21 +321,20 @@ internal sealed partial class UsageCardContext : ApplicationContext
         _sessionRefreshPending = false;
         try
         {
-            var route = _route.GetStatus();
+            var route = _page.GetStatus();
             _tokens.PreferredThreadId = route.ThreadId;
-            var candidates = _route.GetLocalThreadIds();
-            _tokens.AllowedThreadIds = candidates.Length == 0 ? null : candidates.ToHashSet(StringComparer.OrdinalIgnoreCase);
             TokenSnapshot? token;
             try { token = await Task.Run(() => _tokens.Poll()); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { token = null; }
             if (_disposed) return;
-            if (_route.GetStatus().Version != route.Version) { _sessionRefreshPending = true; return; }
+            if (_page.GetStatus().Version != route.Version) { _sessionRefreshPending = true; return; }
             SessionVitals vitals;
             try { vitals = await Task.Run(() => _vitals.Poll(token?.LogPath)); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { vitals = new("未知", "", "数据暂不可用", null, null, null); }
-            var sessionSource = route.ThreadId is not null ? "IPC 订阅会话" : "最近活动会话（自动匹配）";
+            var sessionSource = route.ThreadId is not null ? "当前页面会话" : route.Matches > 1 ? "同名会话 · 无法唯一匹配" : "页面会话未确认";
+            if (route.ThreadId is null) vitals = vitals with { State = sessionSource };
             if (_disposed) return;
-            if (_route.GetStatus().Version != route.Version) { _sessionRefreshPending = true; return; }
+            if (_page.GetStatus().Version != route.Version) { _sessionRefreshPending = true; return; }
             if (_form.Tokens != token || _form.Vitals != vitals || _form.SessionSource != sessionSource)
             { _form.Tokens = token; _form.Vitals = vitals; _form.SessionSource = sessionSource; Redraw(); }
         }
@@ -455,12 +459,12 @@ internal sealed partial class UsageCardContext : ApplicationContext
     }
     protected override void ExitThreadCore()
     {
-        _route.Changed -= RouteChanged;
+        _page.Changed -= RouteChanged;
         _sessionTimer.Dispose();
         _disposed = true; _settingsWait?.Unregister(null); _settingsSignal.Dispose(); _settingsDialog?.Close();
         foreach (var hook in _hooks) UnhookWinEvent(hook);
         _timer.Dispose(); _eventTimer.Dispose(); _fade.Dispose(); _hover.Dispose(); _expand.Dispose(); _focus.Dispose();
-        _quota.Dispose(); _route.Dispose(); _tokens.Dispose();
+        _quota.Dispose(); _page.Dispose(); _tokens.Dispose();
         _tray.Visible = false; _tray.Dispose(); _form.Dispose();
         base.ExitThreadCore();
     }

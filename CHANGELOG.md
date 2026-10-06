@@ -1,5 +1,12 @@
 # Changelog / 更新记录
 
+## 0.14.3 — page identity / 页面识别
+
+- Replace production subscription/recent-log routing with native UI Automation document title + unique local catalog matching. No Codex patch, debugger, WPF or database package.
+- Read identity on a separate MTA thread; stop polling while hidden and invalidate stale/ambiguous identity. Background subscriptions no longer determine the visible session.
+- Add catalog regressions for manual rename, duplicate titles, missing metadata, read-only queries and legacy schemas. Live two-round page switching was observed in the diagnostic prototype; integrated page/log reading passed.
+- 当前页面标题唯一匹配会话目录；同名不猜测。两次真实往返切换原型验证通过，集成版可读取页面 ID 和日志数据。跨窗口、目录重命名和 Codex 更新兼容性仍需实际体验验证。
+
 ## 0.14.2
 
 - Restore session metrics when Codex keeps multiple subscriptions: select the most recently active subscribed local session, with a labeled local-log fallback when IPC is unavailable.

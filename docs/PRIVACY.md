@@ -6,7 +6,7 @@ This document describes the current source, not a claim that all upstream compon
 |---|---|---|
 | Quota client | Local Codex app-server rate-limit responses | Initialization and quota requests over stdin/stdout |
 | Session monitor | Local session JSONL metadata, usage counters and turn events | No session-file modifications |
-| Desktop route | Local `codex-ipc` named-pipe events | IPC initialization |
+| Page identity | Windows UI Automation primary document title; local thread catalog ID/name/title columns | No application or catalog modifications |
 | Window tracking | Window geometry/DPI/foreground metadata; a few rail-edge pixels for theme/position | Moves its own overlay only |
 | Settings/assets | User preferences, imported fonts/images | Local configuration and asset copies |
 
@@ -21,3 +21,7 @@ The window tracker samples a few host rail pixels to determine its boundary and 
 For public bug reports, remove account identifiers, thread IDs, local paths and chat content. Report the app/Windows version, DPI, configuration choices and a minimal reproduction instead. Do not attach raw session or authentication files.
 
 公开反馈请去除账户标识、会话 ID、本地路径及聊天内容，只提供版本、DPI、配置与复现步骤；不要上传原始日志或认证文件。
+
+Page identity reads the host window’s primary document title through native UI Automation and uniquely matches it to the local SQLite catalog. It does not read chat UI text, require a debugger, modify Codex, or upload titles. Duplicate titles remain unconfirmed. No WPF/database package is added; Windows supplies UIA and SQLite.
+
+页面识别只读取宿主主文档标题，并与本地目录唯一匹配，不读取聊天界面的正文、不打开调试器、不改 Codex、不上传标题。同名不猜测。使用系统原生 UIA/SQLite，不添加 WPF 或数据库依赖。
