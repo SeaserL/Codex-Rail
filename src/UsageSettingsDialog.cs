@@ -12,12 +12,35 @@ internal sealed class ParameterSelection : IMessageFilter, IDisposable
 {
     private readonly Form _form; private readonly Label _feedback;
     private readonly Dictionary<Control, (Control row, NumericUpDown number, string title)> _items = new();
-    private Control? _selected; private int _wheelRemainder;
+    private Control? _selected; private Color _originalBackColor; private int _wheelRemainder;
     internal ParameterSelection(Form form, Label feedback) { _form = form; _feedback = feedback; Application.AddMessageFilter(this); Clear(); }
     internal void Register(Control row, NumericUpDown number, string title) { _items[row] = (row, number, title); number.AccessibleName = title; }
     private (Control row, NumericUpDown number, string title)? Item(Control? control) { for (var c = control; c != null; c = c.Parent) if (_items.TryGetValue(c, out var item)) return item; return null; }
-    internal void Toggle(Control control) { _wheelRemainder = 0; var item = Item(control); if (item == null) { Clear(); return; } var old = _selected; _selected = _selected == item.Value.row ? null : item.Value.row; if (old != null) old.BackColor = Color.Transparent; if (_selected != null) _selected.BackColor = Color.FromArgb(208, 229, 255); _feedback.Text = _selected == null ? "单击参数行选中 → 滚轮调整；再次单击或 Esc 退出。未选中时滚动页面。" : $"已选中：{item.Value.title} · 滚轮调整 · 再次单击或 Esc 退出"; }
-    internal void Clear() { _wheelRemainder = 0; if (_selected != null) _selected.BackColor = Color.Transparent; _selected = null; _feedback.Text = "单击参数行选中 → 滚轮调整；再次单击或 Esc 退出。未选中时滚动页面。"; }
+    private void RestoreSelection()
+    {
+        if (_selected is { IsDisposed: false }) _selected.BackColor = _originalBackColor;
+        _selected = null;
+    }
+    internal void Toggle(Control control)
+    {
+        _wheelRemainder = 0;
+        var item = Item(control);
+        if (item == null) { Clear(); return; }
+        var selecting = _selected != item.Value.row;
+        RestoreSelection();
+        if (selecting)
+        {
+            _selected = item.Value.row;
+            _originalBackColor = _selected.BackColor;
+            _selected.BackColor = Color.FromArgb(208, 229, 255);
+        }
+        _feedback.Text = _selected == null ? "单击参数行选中 → 滚轮调整；再次单击或 Esc 退出。未选中时滚动页面。" : $"已选中：{item.Value.title} · 滚轮调整 · 再次单击或 Esc 退出";
+    }
+    internal void Clear()
+    {
+        _wheelRemainder = 0; RestoreSelection();
+        _feedback.Text = "单击参数行选中 → 滚轮调整；再次单击或 Esc 退出。未选中时滚动页面。";
+    }
     internal bool Wheel(Control control, int delta) { var item = Item(control); if (item == null || item.Value.row != _selected) return false; var n = item.Value.number; _wheelRemainder += delta; var steps = _wheelRemainder / 120; _wheelRemainder %= 120; n.Value = Math.Clamp(n.Value + steps * n.Increment, n.Minimum, n.Maximum); return true; }
     public bool PreFilterMessage(ref Message m)
     {

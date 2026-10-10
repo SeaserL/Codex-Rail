@@ -1,5 +1,10 @@
 # Changelog / 更新记录
 
+## 0.14.6 — numeric deselection crash / 数字参数取消选中崩溃
+
+- Restore each selected parameter control's original background instead of assigning transparent to NumericUpDown, which does not support transparent backgrounds.
+- Add a regression reproducing row count 4 → 5 followed by deselection, numeric-to-numeric selection, Escape and page changes.
+- 修复修改行数等数字参数后取消选中导致的闪退，保留原有点击选中与滚轮调整逻辑。
 ## 0.14.5 — menu dismissal / 右键菜单关闭
 
 - Dismiss the nonactivating overlay menu on outside mouse-down, Escape and a foreground application change. Outside clicks continue to the original target.
