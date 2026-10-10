@@ -48,3 +48,5 @@ Background stable-release checks start after 30 seconds and repeat at most once 
 默认后台检查正式 Release，启动 30 秒后检查，该实例内每 24 小时最多检查一次；可以关闭。点击通知或检查更新，确认后才下载、替换并重启。保留 `.previous`，设置和资源不参与替换。无法写入/校验失败不会关闭主程序；新进程创建失败会回退，新进程启动后自身崩溃仍需手动回退。旧版 0.14.5 没有更新器，首次升级需手动解压新包。
 
 Development checkouts carry `codexrail.development`. Their executables and `--dev` runs use `dev-data` next to the EXE, independent instance names and no production startup/update changes. Do not put this marker in the normal portable installation.
+
+The GitHub repository was renamed to SeaserL/Codex-Monitor. Updates query that repository and accept assets under either its current path or the original Codex-Rail path. / 仓库已改名为 Codex-Monitor，更新器兼容新旧地址。

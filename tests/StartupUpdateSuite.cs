@@ -15,6 +15,7 @@ internal static class StartupUpdateSuite
         if (ReleaseUpdater.Parse(Json("v0.14.6"), new Version(0, 14, 7)) != null) throw new Exception("downgrade offered");
         if (ReleaseUpdater.Parse(Json("v0.15.0", true), new Version(0, 14, 7)) != null) throw new Exception("preview offered");
         if (ReleaseUpdater.Parse(Json("v0.15.0"), new Version(0, 14, 7))?.Version != new Version(0, 15, 0)) throw new Exception("new release missed");
+        if (ReleaseUpdater.Parse(Json("v0.15.0").Replace("/Codex-Rail/", "/Codex-Monitor/"), new Version(0, 14, 7))?.Version != new Version(0, 15, 0)) throw new Exception("renamed repository rejected");
         try { ReleaseUpdater.Parse(Json("v0.15.0", host: "invalid.test"), new Version(0, 14, 7)); throw new Exception("external asset accepted"); } catch (InvalidDataException) { }
         // Malformed/corrupt archives must not overwrite any live executable.
         var path = Path.Combine(args[1], "corrupt.zip"); File.WriteAllText(path, "invalid");

@@ -19,14 +19,16 @@ internal static class ReleaseUpdater
         {
             if (asset.GetProperty("name").GetString() != $"CodexRail-{tag}-win-x64.zip") continue;
             var url = new Uri(asset.GetProperty("browser_download_url").GetString()!);
-            if (url.Scheme != "https" || url.Host != "github.com" || !url.AbsolutePath.StartsWith("/SeaserL/Codex-Rail/releases/download/", StringComparison.Ordinal)) throw new InvalidDataException("Unexpected release download location");
+            if (url.Scheme != "https" || url.Host != "github.com" ||
+                !(url.AbsolutePath.StartsWith("/SeaserL/Codex-Rail/releases/download/", StringComparison.Ordinal) ||
+                  url.AbsolutePath.StartsWith("/SeaserL/Codex-Monitor/releases/download/", StringComparison.Ordinal))) throw new InvalidDataException("Unexpected release download location");
             var digest = asset.TryGetProperty("digest", out var d) ? d.GetString() : null;
             if (digest is null || !digest.StartsWith("sha256:", StringComparison.Ordinal) || digest.Length != 71) throw new InvalidDataException("Release SHA256 digest is missing");
             return new(version, tag, url, digest);
         }
         return null;
     }
-    internal static async Task<ReleaseUpdate?> CheckAsync() => Parse(await Client.GetStringAsync("https://api.github.com/repos/SeaserL/Codex-Rail/releases/latest"), new Version(Application.ProductVersion.Split('+')[0]));
+    internal static async Task<ReleaseUpdate?> CheckAsync() => Parse(await Client.GetStringAsync("https://api.github.com/repos/SeaserL/Codex-Monitor/releases/latest"), new Version(Application.ProductVersion.Split('+')[0]));
     internal static void VerifyArchive(string zipPath, ReleaseUpdate release, string destination, bool standalone)
     {
         using (var stream = File.OpenRead(zipPath)) if ("sha256:" + Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant() != release.Digest) throw new InvalidDataException("ZIP checksum mismatch");
