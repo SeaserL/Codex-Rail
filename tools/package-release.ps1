@@ -1,13 +1,15 @@
-param([string]$Version='0.14.6')
+param([string]$Version='0.14.7')
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 & (Join-Path $root 'build.ps1')
 & (Join-Path $root 'build.ps1') -Standalone
+& (Join-Path $root 'tools/build-watcher.ps1')
 $dist=Join-Path $root 'dist'
 $bundle=Join-Path $dist ('CodexRail-v'+$Version+'-win-x64')
 New-Item -ItemType Directory -Force $bundle | Out-Null
 Copy-Item -LiteralPath (Join-Path $root 'publish/small/CodexRail.exe') -Destination (Join-Path $bundle 'CodexRail-win-x64.exe')
 Copy-Item -LiteralPath (Join-Path $root 'publish/standalone/CodexRail.exe') -Destination (Join-Path $bundle 'CodexRail-win-x64-standalone.exe')
+Copy-Item -LiteralPath (Join-Path $root 'publish/watcher/CodexRail.Watcher.exe') -Destination $bundle
 foreach($name in @('LICENSE','THIRD_PARTY_NOTICES.md')){Copy-Item -LiteralPath (Join-Path $root $name) -Destination $bundle}
 Copy-Item -LiteralPath (Join-Path $root 'docs/INSTALL.md') -Destination $bundle
 $assets=Get-Content -LiteralPath (Join-Path $root 'src/obj/project.assets.json') -Raw | ConvertFrom-Json -AsHashtable

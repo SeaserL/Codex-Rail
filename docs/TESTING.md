@@ -21,3 +21,5 @@ Run `./test.ps1` for synthetic regression checks. `--performance` additionally r
 `./test.ps1` 只运行合成回归。`--performance` 会额外读取当前登录账户额度，CI 不运行该探针。动图是示例渲染，不是鼠标悬停判定或 Windows 合成器录屏。
 
 0.14.5 adds regressions for unique/ambiguous read-only page catalog lookup, stale session reads, premultiplied data transitions and temporary menu-hook lifecycle. Native menu tests install hooks and inject controller observations; they do not claim end-to-end clicks on Codex or the tray. / 0.14.5 新增页面目录匹配、过期读取、像素过渡和菜单监听生命周期回归；菜单测试不代替人工在 Codex/托盘上的完整操作验证。
+
+0.14.7 adds development configuration isolation, restoring a hidden instance through its named event, release ordering/asset host/digest checks, both package-variant extraction/version verification, and independent native apply/restart/rollback smoke tests with fixture executables and unchanged fixture-settings hashes. The native watcher standby sample was measured without starting a real overlay. Actual login/reboot timing and a real future Release upgrade remain manual checks.

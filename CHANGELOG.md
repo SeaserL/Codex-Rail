@@ -1,5 +1,13 @@
 # Changelog / 更新记录
 
+## 0.14.7 — startup, development isolation and updates / 启动与更新
+
+- Repeated EXE launch restores an existing hidden instance; deferred first synchronization and invalidated negative focus cache improve startup/reappearance.
+- Add a native 116 KiB watcher: foreground window events plus a 5-second fallback, no .NET or session parsing while waiting. Follow-launched overlays exit after Codex processes close.
+- Startup registration targets the adjacent watcher and current executable, retaining portable directory paths through in-place updates.
+- Opt-out background GitHub stable-release checks and explicit confirmation before update/restart. Verify ZIP digest, binary checksums and version; stage before shutdown, preserve settings/assets, retain the previous EXE and roll back if process launch fails.
+- Marked development checkouts and --dev use isolated settings/assets and instance names, disable startup and network update checks. Tests never read production preferences.
+- 新增启动恢复、轻量跟随发现器、确认式更新及开发配置隔离；包含 0.14.6 行数取消选中崩溃修复。实际开机与物理多屏仍需人工验证。
 ## 0.14.6 — numeric deselection crash / 数字参数取消选中崩溃
 
 - Restore each selected parameter control's original background instead of assigning transparent to NumericUpDown, which does not support transparent backgrounds.

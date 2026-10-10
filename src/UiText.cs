@@ -12,6 +12,7 @@ internal static class UiText
     private static readonly bool SystemEnglish = !CultureInfo.GetCultureInfo(GetUserDefaultUILanguage()).Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
     private static readonly (string Chinese,string English)[] Terms = new Dictionary<string,string>
     {
+        ["检查更新…"]="Check for updates…", ["后台检查更新"]="Check updates in background",
         ["当前会话未确认"]="Conversation unconfirmed", ["等待连接 Codex"]="Waiting for Codex connection",
         ["IPC 订阅会话"]="IPC subscribed session", ["最近活动会话（自动匹配）"]="Recently active session (auto-matched)",
         ["当前页面会话"]="Current page session", ["同名会话 · 无法唯一匹配"]="Duplicate names: ambiguous session", ["页面会话未确认"]="Page session unconfirmed",

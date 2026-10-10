@@ -27,3 +27,5 @@ Page identity reads the host window’s primary document title through native UI
 页面识别只读取宿主主文档标题，并与本地目录唯一匹配，不读取聊天界面的正文、不打开调试器、不改 Codex、不上传标题。同名不猜测。使用系统原生 UIA/SQLite，不添加 WPF 或数据库依赖。
 
 While a context menu is open, temporary Windows low-level hooks inspect mouse-down coordinates and Escape key-down solely to dismiss that menu. No input history or text is recorded or uploaded; the hooks are removed when the menu closes. / 右键菜单打开期间临时监听鼠标按下位置和 Esc，只用于收起菜单，不记录或上传输入历史，关闭菜单后移除监听。
+
+Update checks contact api.github.com for SeaserL/Codex-Rail release metadata; confirmed downloads use GitHub release assets. GitHub receives normal connection metadata (such as IP and user agent), never chat logs or preferences. Disable background checking from the tray menu. The native watcher only queries foreground process paths/window visibility; it reads no session data. / 更新检查访问 GitHub，确认后才下载，不发送聊天或设置；可关闭后台检查。发现器只读取前台进程路径和窗口可见性。

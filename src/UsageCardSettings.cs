@@ -27,6 +27,7 @@ internal sealed class UsageCardSettings
     public UiLanguage Language { get; set; } = UiLanguage.System;
     [JsonIgnore] public int RuntimeMinimumHeight { get; set; } = 310;
     [JsonIgnore] public int RuntimeFooterHeight { get; set; }
+    public bool CheckUpdates { get; set; } = true;
     public bool AllowDrag { get; set; } = true;
     public bool BoldText { get; set; } = true;
     public bool Material { get; set; }

@@ -12,6 +12,7 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        AppPaths.Configure(args);
         var sessionRoot = SessionPathResolver.Resolve(args);
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         Application.EnableVisualStyles();
@@ -20,18 +21,18 @@ internal static class Program
 
         using var singleInstanceMutex = new Mutex(
             initiallyOwned: true,
-            name: "Local\\CodexUsageCardLocal",
+            name: AppPaths.Name("CodexUsageCardLocal"),
             createdNew: out var createdNew);
         if (!createdNew)
         {
-            if (args.Contains("--settings") && EventWaitHandle.TryOpenExisting(@"Local\CodexUsageCardSettings", out var signal))
+            if (EventWaitHandle.TryOpenExisting(AppPaths.Name(args.Contains("--settings") ? "CodexUsageCardSettings" : "CodexUsageCardShow"), out var signal))
             { using (signal) signal.Set(); }
             return;
         }
 
-        var context = new UsageCardContext(sessionRoot);
+        var context = new UsageCardContext(sessionRoot, args.Contains("--follow"));
         if (args.Contains("--settings"))
-        { using var signal = EventWaitHandle.OpenExisting(@"Local\CodexUsageCardSettings"); signal.Set(); }
+        { using var signal = EventWaitHandle.OpenExisting(AppPaths.Name("CodexUsageCardSettings")); signal.Set(); }
         Application.Run(context);
         GC.KeepAlive(singleInstanceMutex);
     }

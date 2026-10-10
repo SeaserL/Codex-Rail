@@ -17,3 +17,5 @@ https://github.com/zhongyang219/TrafficMonitor — design and architecture inspi
 ## .NET and Windows
 
 Framework-dependent distributions require .NET 10 Desktop Runtime. Self-contained distributions include Microsoft runtime components under their applicable licenses/notices. `tools/package-release.ps1` exports the runtime pack's license and third-party notices alongside the binary when available, and stops if it cannot locate them. Windows fonts are used for rendering on the build machine, not redistributed as font files.
+
+The native watcher is built with Microsoft Visual C++ and a statically linked redistributable CRT. It requires no separate VC runtime installation. Windows API libraries are supplied by the operating system.

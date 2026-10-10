@@ -7,7 +7,7 @@ namespace CodexTokenOverlay;
 
 internal sealed partial class UsageCardContext : ApplicationContext
 {
-    private static readonly string DataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodexUsageCardLocal");
+    private static string DataDir => AppPaths.DataDirectory;
     private readonly UsageCardForm _form = new();
     private readonly QuotaClient _quota = new();
     private readonly CodexPageThreadMonitor _page;
@@ -33,7 +33,7 @@ internal sealed partial class UsageCardContext : ApplicationContext
     private int _themeStart;
     private UsageCardSettings ActiveSettings => _form.Settings;
     private UsageSettingsDialog? _settingsDialog;
-    private readonly EventWaitHandle _settingsSignal = new(false, EventResetMode.AutoReset, @"Local\CodexUsageCardSettings");
+    private readonly EventWaitHandle _settingsSignal = new(false, EventResetMode.AutoReset, AppPaths.Name("CodexUsageCardSettings"));
     private RegisteredWaitHandle? _settingsWait;
     private readonly WinEvent _callback;
     private readonly List<IntPtr> _hooks = new();
@@ -58,8 +58,9 @@ internal sealed partial class UsageCardContext : ApplicationContext
     private uint _hostPid;
     private bool _focusAllowed, _codexActive;
 
-    public UsageCardContext(string sessionRoot)
+    public UsageCardContext(string sessionRoot, bool follow = false)
     {
+        _following = follow;
         _page = new CodexPageThreadMonitor(Path.Combine(Path.GetDirectoryName(sessionRoot)!, "state_5.sqlite"));
         Directory.CreateDirectory(DataDir);
         try { _settings = JsonSerializer.Deserialize<UsageCardSettings>(File.ReadAllText(Path.Combine(DataDir, "settings.json"))) ?? new(); }
@@ -141,14 +142,17 @@ internal sealed partial class UsageCardContext : ApplicationContext
         startup.CheckedChanged += (_, _) =>
         {
             using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
-            if (startup.Checked) key.SetValue("CodexUsageCardLocal", $"\"{Environment.ProcessPath}\"");
-            else key.DeleteValue("CodexUsageCardLocal", false);
+            if (startup.Checked) { if (!RegisterStartup()) { startup.Checked = false; return; } }
+            else { key.DeleteValue("CodexUsageCardLocal", false); StopWatcher(); }
         };
+        startup.Enabled = !AppPaths.Development;
         menu.Items.Add(startup);
+
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("退出", null, (_, _) => ExitThread());
         _tray = new NotifyIcon { Icon = SystemIcons.Information, Text = "Codex 剩余额度 · 本地修改版", Visible = true, ContextMenuStrip = menu };
         _form.ContextMenuStrip = menu;
+        AddUpdateMenu(menu);
         void TranslateMenu(){foreach(ToolStripItem item in menu.Items){if(item.Tag is not string original){original=item.Text??"";item.Tag=original;}item.Text=UiText.T(original);}_tray.Text=UiText.T("Codex 剩余额度 · 本地修改版");}
         _translateMenu=TranslateMenu; TranslateMenu();
         _form.PageChanged += () => { _form.Rebuild(_dpi == 0 ? 96 : _dpi); Synchronize(); if (_form.Visible) _form.Present(_position, _alpha); };
@@ -212,12 +216,12 @@ internal sealed partial class UsageCardContext : ApplicationContext
     _form.Expansion = _expandFrom + (_expandTarget - _expandFrom) * eased;
     OnDetails(); if (progress >= 1) _expand.Stop();
 };
-        _focus.Tick += (_, _) => { if (_disposed) return; if (!CheckFocus()) Hide(true); else if (_form.Visible && !_form.Capture && !_menuOpen && Environment.TickCount - _themeStart >= 150) { _themeStart = Environment.TickCount; RefreshTheme(); } }; _focus.Start();
+        _focus.Tick += (_, _) => { if (_disposed) return; if (!CheckFocus()) Hide(true); else if (!_form.Visible) Synchronize(); else if (_form.Visible && !_form.Capture && !_menuOpen && Environment.TickCount - _themeStart >= 150) { _themeStart = Environment.TickCount; RefreshTheme(); } }; _focus.Start();
         _page.Changed += RouteChanged;
         _sessionPlaceholder.Tick += (_, _) => { _sessionPlaceholder.Stop(); if (_awaitingSession) { Redraw(true); PollData(); } };
         _sessionTimer.Tick += (_, _) => PollData();
         _sessionTimer.Start();
-        _hover.Start(); _timer.Start(); Synchronize(); PollData();
+        _hover.Start(); _timer.Start(); InitializeStartup(); _form.BeginInvoke(() => { Synchronize(); PollData(); });
     }
     private void RouteChanged()
     {
@@ -249,7 +253,7 @@ internal sealed partial class UsageCardContext : ApplicationContext
         var foreground = GetForegroundWindow();
         var hostOkay = _target is not null && IsWindowVisible(_target.HostWindow.Handle) && !IsIconic(_target.HostWindow.Handle);
         if (foreground == IntPtr.Zero) return _focusAllowed = _codexActive && hostOkay;
-        if (foreground == _focusWindow && _target is not null) return _focusAllowed && hostOkay;
+        if (foreground == _focusWindow && _target is not null && _focusAllowed && hostOkay) return true;
         _focusWindow = foreground;
         GetWindowThreadProcessId(foreground, out var pid);
         if (_target is not null && pid == _hostPid)
@@ -485,6 +489,7 @@ internal sealed partial class UsageCardContext : ApplicationContext
     }
     protected override void ExitThreadCore()
     {
+        _showWait?.Unregister(null); _showSignal.Dispose(); _lifecycle.Dispose();
         _page.Changed -= RouteChanged;
         _sessionTimer.Dispose();
         _sessionPlaceholder.Dispose();

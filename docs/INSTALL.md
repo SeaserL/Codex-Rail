@@ -36,3 +36,15 @@ An unavailable 5-hour field is not zero remaining. `—` means data was not supp
 Check that the program is running in the tray, Codex is foreground and the tray hide switch is off. The rail is hidden for minimized/other foreground apps and when fewer than 100 logical pixels remain between reserved navigation/account areas. Codex layout or IPC changes can also require a compatibility update.
 
 检查托盘进程、Codex 前台和隐藏开关。最小化、其他应用前台或可用高度不足 100 DIP 时隐藏；Codex 界面及 IPC 更新也可能需要兼容修复。
+
+## Startup and updates / 启动与更新（0.14.7）
+
+Extract the complete ZIP including `CodexRail.Watcher.exe`; keep all EXEs together. Enable Windows startup from the tray menu. Only the native watcher starts at login and starts the overlay when Codex becomes foreground; a follow-launched overlay exits when Codex closes. Run the main EXE manually for immediate display when Codex is foreground. Launching it again restores an existing hidden instance. Windows Startup Apps can still disable a registered entry.
+
+完整解压并保留相邻的发现器 EXE。托盘菜单启用自启动后，登录时仅启动原生发现器，Codex 成为前台时启动仪表。手动双击主 EXE 可显示/恢复已有实例。便携目录搬动后请关闭再开启自启动以重新登记路径；Windows 启动应用页仍可禁用登记项。
+
+Background stable-release checks start after 30 seconds and repeat at most once per day within a running instance. Click the notification or Check for updates to confirm installation. Updates replace only the running EXE and watcher in their current directory, retain `.previous`, and leave `%LOCALAPPDATA%/CodexUsageCardLocal` settings/assets untouched. A write-protected directory or verification failure stops the update before shutdown. A failure to create the updated process restores the prior EXE; a crash after successful process creation requires manual rollback.
+
+默认后台检查正式 Release，启动 30 秒后检查，该实例内每 24 小时最多检查一次；可以关闭。点击通知或检查更新，确认后才下载、替换并重启。保留 `.previous`，设置和资源不参与替换。无法写入/校验失败不会关闭主程序；新进程创建失败会回退，新进程启动后自身崩溃仍需手动回退。旧版 0.14.5 没有更新器，首次升级需手动解压新包。
+
+Development checkouts carry `codexrail.development`. Their executables and `--dev` runs use `dev-data` next to the EXE, independent instance names and no production startup/update changes. Do not put this marker in the normal portable installation.
